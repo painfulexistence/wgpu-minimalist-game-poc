@@ -23,3 +23,8 @@ lto = "fat"
 codegen-units = 1
 panic = "abort"
 strip = true
+
+# wgpu-hal with the naga -> SPIR-V translation paths removed, so LTO can drop
+# naga's SPIR-V writer. The game only ever passes precompiled SPIR-V.
+[patch.crates-io]
+wgpu-hal = { path = "vendor/wgpu-hal" }
