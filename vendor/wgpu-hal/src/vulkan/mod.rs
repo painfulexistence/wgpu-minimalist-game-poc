@@ -559,6 +559,7 @@ pub struct Device {
     mem_allocator: Mutex<gpu_allocator::vulkan::Allocator>,
     desc_allocator: Mutex<descriptor::DescriptorAllocator>,
     valid_ash_memory_types: u32,
+    #[allow(dead_code)] // only read by the patched-out naga paths
     naga_options: naga::back::spv::Options<'static>,
     #[cfg(feature = "renderdoc")]
     render_doc: crate::auxil::renderdoc::RenderDoc,

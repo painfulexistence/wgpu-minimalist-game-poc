@@ -1,4 +1,4 @@
-use alloc::{borrow::ToOwned as _, collections::BTreeMap, ffi::CString, sync::Arc, vec::Vec};
+use alloc::{collections::BTreeMap, ffi::CString, sync::Arc, vec::Vec};
 use core::{
     ffi::CStr,
     mem::{self, MaybeUninit},
@@ -700,89 +700,15 @@ impl super::Device {
         &self,
         stage: &crate::ProgrammableStage<super::ShaderModule>,
         naga_stage: naga::ShaderStage,
-        binding_map: &naga::back::spv::BindingMap,
+        _binding_map: &naga::back::spv::BindingMap,
     ) -> Result<CompiledStage, crate::PipelineError> {
         let stage_flags = crate::auxil::map_naga_stage(naga_stage);
         let vk_module = match *stage.module {
             super::ShaderModule::Raw(raw) => raw,
-            super::ShaderModule::Intermediate {
-                ref naga_shader,
-                runtime_checks,
-            } => {
-                let pipeline_options = naga::back::spv::PipelineOptions {
-                    entry_point: stage.entry_point.to_owned(),
-                    shader_stage: naga_stage,
-                };
-                let needs_temp_options = !runtime_checks.bounds_checks
-                    || !runtime_checks.force_loop_bounding
-                    || !runtime_checks.ray_query_initialization_tracking
-                    || !binding_map.is_empty()
-                    || naga_shader.debug_source.is_some()
-                    || !stage.zero_initialize_workgroup_memory
-                    || !runtime_checks.task_shader_dispatch_tracking
-                    || !runtime_checks.mesh_shader_primitive_indices_clamp
-                    || !runtime_checks.int_div_checks;
-
-                let mut temp_options;
-                let options = if needs_temp_options {
-                    temp_options = self.naga_options.clone();
-                    if !runtime_checks.bounds_checks {
-                        temp_options.bounds_check_policies = naga::proc::BoundsCheckPolicies {
-                            index: naga::proc::BoundsCheckPolicy::Unchecked,
-                            buffer: naga::proc::BoundsCheckPolicy::Unchecked,
-                            image_load: naga::proc::BoundsCheckPolicy::Unchecked,
-                            binding_array: naga::proc::BoundsCheckPolicy::Unchecked,
-                        };
-                    }
-                    if !runtime_checks.force_loop_bounding {
-                        temp_options.force_loop_bounding = false;
-                    }
-                    if !runtime_checks.ray_query_initialization_tracking {
-                        temp_options.ray_query_initialization_tracking = false;
-                    }
-                    if !binding_map.is_empty() {
-                        temp_options.binding_map = binding_map.clone();
-                    }
-
-                    if let Some(ref debug) = naga_shader.debug_source {
-                        temp_options.debug_info = Some(naga::back::spv::DebugInfo {
-                            source_code: &debug.source_code,
-                            file_name: debug.file_name.as_ref(),
-                            language: naga::back::spv::SourceLanguage::WGSL,
-                        })
-                    }
-                    if !stage.zero_initialize_workgroup_memory {
-                        temp_options.zero_initialize_workgroup_memory =
-                            naga::back::spv::ZeroInitializeWorkgroupMemoryMode::None;
-                    }
-                    if !runtime_checks.task_shader_dispatch_tracking {
-                        temp_options.task_dispatch_limits = None;
-                    }
-                    temp_options.mesh_shader_primitive_indices_clamp =
-                        runtime_checks.mesh_shader_primitive_indices_clamp;
-                    temp_options.emit_int_div_checks = runtime_checks.int_div_checks;
-
-                    &temp_options
-                } else {
-                    &self.naga_options
-                };
-
-                let (module, info) = naga::back::pipeline_constants::process_overrides(
-                    &naga_shader.module,
-                    &naga_shader.info,
-                    Some((naga_stage, stage.entry_point)),
-                    stage.constants,
-                )
-                .map_err(|e| {
-                    crate::PipelineError::PipelineConstants(stage_flags, format!("{e}"))
-                })?;
-
-                let spv = {
-                    profiling::scope!("naga::spv::write_vec");
-                    naga::back::spv::write_vec(&module, &info, options, Some(&pipeline_options))
-                }
-                .map_err(|e| crate::PipelineError::Linkage(stage_flags, format!("{e}")))?;
-                self.create_shader_module_impl(&spv, &None)?
+            // Patched: translating naga IR at runtime would link naga's SPIR-V
+            // writer. Only `ShaderInput::SpirV` is supported.
+            super::ShaderModule::Intermediate { .. } => {
+                return Err(crate::PipelineError::Linkage(stage_flags, "naga shader input is patched out of this wgpu-hal build; pass SPIR-V".into()));
             }
         };
 
@@ -1858,45 +1784,9 @@ impl crate::Device for super::Device {
         shader: crate::ShaderInput,
     ) -> Result<super::ShaderModule, crate::ShaderError> {
         let shader_module = match shader {
-            crate::ShaderInput::Naga(naga_shader)
-                if self
-                    .shared
-                    .workarounds
-                    .contains(super::Workarounds::SEPARATE_ENTRY_POINTS)
-                    || !naga_shader.module.overrides.is_empty() =>
-            {
-                super::ShaderModule::Intermediate {
-                    naga_shader,
-                    runtime_checks: desc.runtime_checks,
-                }
-            }
-            crate::ShaderInput::Naga(naga_shader) => {
-                let mut naga_options = self.naga_options.clone();
-                naga_options.debug_info =
-                    naga_shader
-                        .debug_source
-                        .as_ref()
-                        .map(|d| naga::back::spv::DebugInfo {
-                            source_code: d.source_code.as_ref(),
-                            file_name: d.file_name.as_ref(),
-                            language: naga::back::spv::SourceLanguage::WGSL,
-                        });
-                if !desc.runtime_checks.bounds_checks {
-                    naga_options.bounds_check_policies = naga::proc::BoundsCheckPolicies {
-                        index: naga::proc::BoundsCheckPolicy::Unchecked,
-                        buffer: naga::proc::BoundsCheckPolicy::Unchecked,
-                        image_load: naga::proc::BoundsCheckPolicy::Unchecked,
-                        binding_array: naga::proc::BoundsCheckPolicy::Unchecked,
-                    };
-                }
-                let spv = naga::back::spv::write_vec(
-                    &naga_shader.module,
-                    &naga_shader.info,
-                    &naga_options,
-                    None,
-                )
-                .map_err(|e| crate::ShaderError::Compilation(format!("{e}")))?;
-                super::ShaderModule::Raw(self.create_shader_module_impl(&spv, &desc.label)?)
+            // Patched: see `compile_stage`.
+            crate::ShaderInput::Naga(_) => {
+                return Err(crate::ShaderError::Compilation("naga shader input is patched out of this wgpu-hal build; pass SPIR-V".into()));
             }
             crate::ShaderInput::SpirV(data) => {
                 super::ShaderModule::Raw(self.create_shader_module_impl(data, &desc.label)?)

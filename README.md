@@ -34,10 +34,14 @@ release profile 已開 `opt-level = "z"`、fat LTO、`codegen-units = 1`、`pani
 
 | | 大小 |
 | --- | --- |
-| 執行檔（x86_64 Linux） | ~1.7 MB |
-| xz -9e 壓縮後 | ~0.6 MB |
+| 執行檔（x86_64 Linux） | 1,094,640 bytes（~1.04 MB，低於 1.44 MB 磁碟片） |
 | 其中 SPIR-V shader | ~17 KB |
 
-執行檔內容大致分佈（未 strip 時以 symbol 估算）：naga ~410 KB、winit/X11 ~345 KB、std ~245 KB、wgpu-hal/ash ~115 KB、遊戲本身 ~13 KB。
+### wgpu-hal patch
 
-naga 在 runtime 完全沒用到，但 wgpu-hal 的 Vulkan backend 在 `create_shader_module` 裡仍會 match `ShaderInput::Naga`，所以 spv-out 會被連結進來。要再縮就是 patch wgpu-hal 把那條路徑拿掉，或改用 nightly `-Z build-std` + `panic_immediate_abort`。
+`vendor/wgpu-hal` 是 wgpu-hal 30.0.1，透過 `[patch.crates-io]` 取代 crates.io 版本。唯一的修改在 `src/vulkan/device.rs`：
+把 `ShaderInput::Naga` 與 `ShaderModule::Intermediate` 兩條在 runtime 把 naga IR 轉成 SPIR-V 的路徑改成直接回錯誤。
+沒有呼叫端之後，LTO 就能把 naga 的 SPIR-V writer、`proc`、`pipeline_constants` 等整包丟掉，執行檔從 ~1.74 MB 降到 ~1.09 MB。
+
+代價：這份 wgpu-hal 只吃 `ShaderInput::SpirV`。本專案的 shader 本來就在 build time 編好，所以沒有影響。
+升級 wgpu-hal 時要重新 vendor 並套用同樣的修改（`git show` 這個 patch 的 commit 即可看到 diff）。
