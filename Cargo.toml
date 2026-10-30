@@ -1,0 +1,25 @@
+[package]
+name = "hopper"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+raw-window-handle = "0.6"
+wgpu-hal = { version = "30", default-features = false, features = ["vulkan"] }
+wgt = { version = "30", package = "wgpu-types", default-features = false }
+winit = { version = "0.30", default-features = false, features = ["rwh_06"] }
+
+[features]
+default = ["x11"]
+x11 = ["winit/x11"]
+wayland = ["winit/wayland", "winit/wayland-dlopen"]
+
+[build-dependencies]
+naga = { version = "30", default-features = false, features = ["wgsl-in", "spv-out"] }
+
+[profile.release]
+opt-level = "z"
+lto = "fat"
+codegen-units = 1
+panic = "abort"
+strip = true
