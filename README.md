@@ -45,3 +45,10 @@ release profile 已開 `opt-level = "z"`、fat LTO、`codegen-units = 1`、`pani
 
 代價：這份 wgpu-hal 只吃 `ShaderInput::SpirV`。本專案的 shader 本來就在 build time 編好，所以沒有影響。
 升級 wgpu-hal 時要重新 vendor 並套用同樣的修改（`git show` 這個 patch 的 commit 即可看到 diff）。
+
+## Future TODOs
+
+- **啟動失敗時顯示錯誤訊息框**：目前找不到 Vulkan（例如 macOS 沒裝 MoltenVK）或沒有可用 GPU 時會直接 abort，從檔案總管／Finder 點兩下啟動的玩家看不到任何訊息。
+  winit 不提供對話框，打算用 `std::panic::set_hook` 統一攔截，各平台各一個小函式顯示：
+  Windows 用 `user32` 的 `MessageBoxW`、macOS 用 CoreFoundation 的 `CFUserNotificationDisplayAlert`、Linux 依序嘗試 `zenity` / `kdialog`，都沒有就印到 stderr。
+  不用 `rfd` 等現成 crate，因為它們在 Linux 上會拉進 GTK 或 D-Bus，體積代價太高。
