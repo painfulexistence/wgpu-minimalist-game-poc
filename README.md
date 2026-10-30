@@ -48,6 +48,16 @@ release profile 已開 `opt-level = "z"`、fat LTO、`codegen-units = 1`、`pani
 
 ## Future TODOs
 
+依優先順序：
+
+1. **DX12 後端**：給沒有 Vulkan 的 Windows 電腦（舊內顯、虛擬機、沒裝廠商驅動）。Windows 10 以後內建 D3D12，還有 WARP 軟體繪圖兜底。
+   shader 需另外產生一份 HLSL（build time 由 naga `hlsl-out` 產生），並比照 Vulkan 把 wgpu-hal DX12 後端的 naga 轉換路徑 patch 掉。
+2. **Metal 後端**：macOS 沒有原生 Vulkan，不能要求評審安裝 Vulkan SDK。shader 在 build time 由 naga `msl-out` 產生 MSL 字串，以 `ShaderInput::Msl` 傳入；
+   同樣要 patch 掉 Metal 後端的 naga → MSL 路徑，並確認 push constants 綁定的 buffer index 與 wgpu-hal 預期一致。
+3. **三平台 CI**：GitHub Actions 在 Linux / Windows / macOS 各自 build，回報 release 執行檔大小。
+
+其他：
+
 - **啟動失敗時顯示錯誤訊息框**：目前找不到 Vulkan（例如 macOS 沒裝 MoltenVK）或沒有可用 GPU 時會直接 abort，從檔案總管／Finder 點兩下啟動的玩家看不到任何訊息。
   winit 不提供對話框，打算用 `std::panic::set_hook` 統一攔截，各平台各一個小函式顯示：
   Windows 用 `user32` 的 `MessageBoxW`、macOS 用 CoreFoundation 的 `CFUserNotificationDisplayAlert`、Linux 依序嘗試 `zenity` / `kdialog`，都沒有就印到 stderr。

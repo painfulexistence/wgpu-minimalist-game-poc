@@ -1,6 +1,10 @@
 //! A tiny endless runner: winit for the window, wgpu-hal (Vulkan) for the GPU,
 //! and one precompiled SPIR-V shader that draws the whole frame.
 
+// Release builds on Windows start without a console window; debug builds keep
+// it so panic messages stay visible while developing.
+#![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
+
 use hal::{Adapter as _, CommandEncoder as _, Device as _, Instance as _, Queue as _, Surface as _};
 use raw_window_handle::{HasDisplayHandle, HasWindowHandle};
 use std::{borrow::Borrow, iter, time::Instant};
