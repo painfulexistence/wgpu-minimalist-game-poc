@@ -16,6 +16,29 @@
 
 分數 120 之後會出現無人機：低的要跳過、高的要蹲過。
 
+## Vulkan Setup
+
+從 [LunarG](https://vulkan.lunarg.com/sdk/home) 下載並安裝 Vulkan SDK。macOS 上安裝時勾選 **System Global Installation**，
+loader（`libvulkan.dylib`）與 MoltenVK 會裝到 `/usr/local/lib`，ICD 設定檔裝到 `/usr/local/share/vulkan/icd.d`。
+
+### macOS
+
+wgpu-hal 以檔名 `dlopen("libvulkan.dylib")` 載入 loader，但 2023 秋季以後 build 的執行檔 dyld 不再有預設的 fallback 搜尋路徑
+（見 `man dyld` 的 `DYLD_FALLBACK_LIBRARY_PATH`），找不到 `/usr/local/lib`，啟動時會 panic：`Vulkan is not available ... missing Vulkan entry points`。
+
+在 `~/.zshrc` 加上以下其中一種，再開新的 terminal：
+
+```bash
+# 做法一：只補 dyld 搜尋路徑（需要 System Global Installation）
+export DYLD_FALLBACK_LIBRARY_PATH=/usr/local/lib
+```
+
+```bash
+# 做法二：LunarG 官方的環境設定腳本，另外設定 VULKAN_SDK、PATH、layers 與 ICD
+# 路徑含版本號，升級 SDK 後要跟著改
+source ~/VulkanSDK/1.4.363.0/setup-env.sh
+```
+
 ## Build
 
 ```bash
