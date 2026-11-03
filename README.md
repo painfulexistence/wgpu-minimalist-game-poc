@@ -1,3 +1,5 @@
+⚠️ PoC only. Built fast with Claude Code, not audited. If you’re learning wgpu, start with the official examples instead.
+
 # Hopper
 
 用 **wgpu-hal (Vulkan) + winit + 一支 raw SPIR-V shader** 做的極簡無盡跑酷小遊戲。
